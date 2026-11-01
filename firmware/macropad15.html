@@ -659,13 +659,13 @@ small.mut{font-size:10px;color:var(--muted)}
 .marq{position:relative;height:34px;margin:6px 0 10px;border-radius:9px;border:1px solid var(--line);background:#05080d;overflow:hidden}
 .marq span{position:absolute;top:0;left:0;line-height:34px;white-space:nowrap;font:700 20px/34px ui-monospace,Menlo,Consolas,monospace;letter-spacing:2px;color:#7fe9ff;animation:marq 8s linear infinite;will-change:transform}
 @keyframes marq{from{transform:translateX(100%)}to{transform:translateX(-100%)}}
-.lg-cv{display:block;width:100%;max-width:768px;aspect-ratio:4/1;image-rendering:pixelated;border-radius:10px;border:1px solid var(--line);background:#05080d;cursor:crosshair;touch-action:none}
+.lg-cv{display:block;width:100%;max-width:768px;aspect-ratio:4/1;image-rendering:pixelated;border-radius:4px;border:0;box-shadow:0 0 0 1px var(--line);background:#05080d;cursor:crosshair;touch-action:none}   /* đúng 4:1 như OLED 128×32, không viền chiếm chỗ; kích thước chốt về bội số của 128 bằng JS (lgFitSize) để mỗi điểm ảnh vuông và đều nhau */
 .lg-tools{display:flex;flex-wrap:wrap;align-items:center;gap:7px;margin:12px 0}
 .lg-sep{width:1px;height:22px;background:var(--line);margin:0 3px}
 .lg-frames{display:flex;gap:8px;overflow-x:auto;padding:4px 2px 10px}
 .lg-frames button{flex:none;border:1px solid var(--line);background:#05080d;border-radius:8px;padding:3px;cursor:pointer;position:relative}
 .lg-frames button.on{border-color:rgba(34,211,238,.8);box-shadow:0 0 0 1px rgba(34,211,238,.45)}
-.lg-frames canvas{display:block;width:96px;height:24px;image-rendering:pixelated}
+.lg-frames canvas{display:block;width:128px;height:32px;image-rendering:pixelated}
 .lg-frames i{position:absolute;left:5px;top:3px;font-style:normal;font-size:9px;color:#7fe9ff;text-shadow:0 0 3px #000}
 .lg-more{margin-top:14px;border-top:1px solid var(--line);padding-top:12px}
 .lg-more summary{cursor:pointer;font-size:12px;font-weight:600;color:var(--text-2)}
@@ -1266,6 +1266,9 @@ function renderLayers() {
    Ô ma trận (r, c) -> số thứ tự n = c*4 + r -> cột n%5, hàng floor(n/5). */
 const VIS = {};
 POS.forEach(p => { const n = (p % 5) * 4 + Math.floor(p / 5); VIS[p] = [n % 5 + 1, Math.floor(n / 5) + 1]; });
+// Vị trí thật trên mạch: xoay E1 ở dưới, E2 trên-trái, E3 trên-phải; nút nhấn giữ theo ma trận: trên-trái = vị trí 4, trên-phải = 9, dưới = 14.
+// Nên encoder E1 (dưới) dùng nút nhấn số 2 (vị trí 14), E2 (trên-trái) dùng số 0 (vị trí 4), E3 (trên-phải) dùng số 1 (vị trí 9).
+const ENC_PUSH = [2, 0, 1];
 function renderDevice() {
   const keysEl = $('#keys'); keysEl.innerHTML = '';
   keyEls.clear(); glowEls.clear();
@@ -1290,7 +1293,7 @@ function renderDevice() {
   const top = $('#encsTop'), bot = $('#encsBot');
   top.innerHTML = ''; bot.innerHTML = '';
   for (let e = 0; e < 3; e++) {
-    const pushIdx = K(layer, e * 5 + 4), push = w[pushIdx];
+    const pp = ENC_PUSH[e], pushIdx = K(layer, pp * 5 + 4), push = w[pushIdx];   // nút nhấn theo vị trí ma trận (4 / 9 / 14), không theo số E
     const aIdx = ENC(layer, e, 0), bIdx = ENC(layer, e, 1);
     const a = w[aIdx], b = w[bIdx];
     const el = document.createElement('div');
@@ -1303,10 +1306,10 @@ function renderDevice() {
         <button type="button" class="rot l ${catClass(a)}" title="Xoay trái: ${esc(nameOf(a))} · ${hex(a)}"><i>↺</i><span>${esc(a ? shortOf(a) : '—')}</span></button>
         <button type="button" class="rot r ${catClass(b)}" title="Xoay phải: ${esc(nameOf(b))} · ${hex(b)}"><i>↻</i><span>${esc(b ? shortOf(b) : '—')}</span></button>
       </div>`;
-    el.querySelector('.knob').addEventListener('click', () => cellClick(pushIdx, `E${e + 1} · Nhấn`, e * 5 + 4, 'encpush'));
+    el.querySelector('.knob').addEventListener('click', () => cellClick(pushIdx, `E${e + 1} · Nhấn`, pp * 5 + 4, 'encpush'));
     el.querySelector('.rot.l').addEventListener('click', () => cellClick(aIdx, `E${e + 1} · Xoay trái`, null, 'enc'));
     el.querySelector('.rot.r').addEventListener('click', () => cellClick(bIdx, `E${e + 1} · Xoay phải`, null, 'enc'));
-    (e < 2 ? top : bot).append(el);
+    (e === 0 ? bot : top).append(el);   // vị trí thật: E1 ở dưới, E2 trên-trái, E3 trên-phải
   }
   $('#device').classList.toggle('testing', testMode);
   $('#layerHint').textContent = testMode ? 'Chế độ thử: chạm phím để xem phản hồi' : 'Chạm một phím để gán';
@@ -2858,6 +2861,13 @@ function renderLogo() {
   $('#lgLeft').disabled = lgSel <= 0; $('#lgRight').disabled = lgSel >= n - 1;
   $('#lgPlay').textContent = lgPlayT ? '■ Dừng xem thử' : '▶ Xem thử trong app';
 }
+function lgFitSize() {   // khung vẽ luôn 4:1 (128×32 như màn OLED) và rộng bội số của 128 px → điểm ảnh vuông, đều
+  const cv = $('#lgCv'), host = cv && cv.parentElement; if (!host) return;
+  const cs = getComputedStyle(host), avail = host.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+  if (!(avail >= 128)) return;   // đang ẩn: giữ CSS mặc định, tính lại khi hiện ra
+  const wpx = Math.min(768, Math.floor(avail / 128) * 128);
+  cv.style.width = wpx + 'px'; cv.style.height = (wpx / 4) + 'px';
+}
 function lgCur() { return osd.frames[lgSel] || null; }
 function lgMutate(fn, ev) { const f = lgCur(); if (!f) { toast('Hãy thêm một khung trước.', 'warn'); return; } fn(f); renderLogo(); osdChanged(true); }
 function lgPoint(e) {
@@ -3002,6 +3012,8 @@ function bindScreenEvents() {
   on('lgFile', 'change', e => { const f = e.target.files && e.target.files[0]; if (f) lgImport(f); e.target.value = ''; });
   on('lgGen', 'click', lgGenerate);
   const cv = $('#lgCv');
+  if (window.ResizeObserver) new ResizeObserver(lgFitSize).observe(cv.parentElement);
+  window.addEventListener('resize', lgFitSize); lgFitSize();
   cv.addEventListener('pointerdown', e => {
     if (lgPlayT) lgStopPlay();
     if (!lgCur()) { toast('Hãy thêm một khung trước.', 'warn'); return; }
