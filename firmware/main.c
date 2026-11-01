@@ -530,24 +530,29 @@ static void render_h(bool vis) {
   frame(128, OLED_H); pox = 2;   // chua 2 px moi ben trai/phai cho khung
   corner_logo();
   uint16_t hk[4]; int nh = held_list(hk);
-  int y1 = (nh || OLED_H > 32) ? OLED_H - 8 * HELD_SC : OLED_H, ah = y1 - MAIN_Y, cap;
-  char big[12];
-  if (latch_wait) { strcpy(big, "LATCH ?"); cap = 3; }
-  else if (vis) { strcpy(big, lastn); cap = KEY_SC; }
-  else { int a = 0; for (int l = L - 1; l > 0; l--) if (layers >> l & 1) { a = l; break; } lname_get(a, big); cap = IDLE_SC; }
-  int sc = fitsc(big, cap < ah / 8 ? cap : ah / 8);
-  { int w = twd(big, sc); txt(w < FRW ? (FRW - w) / 2 : 0, MAIN_Y + (ah - 8 * sc) / 2, sc, big); }
-  if (vis && !latch_wait) { char c[8]; c[0] = 'x'; putnum(c + 1, rcnt); txt(FRW - twd(c, CNT_SC), 2, CNT_SC, c); }
+  char buf[40]; int hs = HELD_SC, hy = OLED_H - 1;   // hang phim dang de: hy = dong tren cung cua chu (sau khi biet co chu thu nho)
   if (nh) {
-    char buf[40]; int first = 0, hs = HELD_SC;
+    int first = 0;
     for (;;) {
       buf[0] = 0;
       for (int i = first; i < nh; i++) { char lab[8]; kcname(hk[i], lab); if (i > first) strcat(buf, " "); strncat(buf, lab, sizeof buf - strlen(buf) - 1); }
       if (twd(buf, hs) <= FRW) break;
       if (first + 1 < nh) first++; else if (hs > 1) hs--; else break;
     }
-    int w = twd(buf, hs); txt(w < FRW ? FRW - w : 0, OLED_H - 8 * hs - 1, hs, buf);
+    hy = OLED_H - 8 * hs - 1;   // chu cach khung duoi 1 px (bang khoang cach phia tren)
   }
+  int y1 = (nh || OLED_H > 32) ? OLED_H - 8 * HELD_SC : OLED_H, ah = y1 - MAIN_Y, cap;
+  char big[12];
+  if (latch_wait) { strcpy(big, "LATCH ?"); cap = 3; }
+  else if (vis) { strcpy(big, lastn); cap = KEY_SC; }
+  else { int a = 0; for (int l = L - 1; l > 0; l--) if (layers >> l & 1) { a = l; break; } lname_get(a, big); cap = IDLE_SC; }
+  int sc = fitsc(big, cap < ah / 8 ? cap : ah / 8);
+  // can giua theo chieu doc: vung giua = tu duoi hang "xN" (neu dang hien) hoac tu khung tren, den tren hang phim dang de hoac khung duoi
+  bool cnt = vis && !latch_wait;
+  int rt = cnt ? MAIN_Y : 2, rb = nh ? hy - 1 : OLED_H - 2;   // chu cao that = 7 * sc (dong thu 8 cua font la khoang trong)
+  { int w = twd(big, sc); txt(w < FRW ? (FRW - w) / 2 : 0, rt + (rb - rt - 7 * sc) / 2, sc, big); }
+  if (cnt) { char c[8]; c[0] = 'x'; putnum(c + 1, rcnt); txt(FRW - twd(c, CNT_SC), 2, CNT_SC, c); }
+  if (nh) { int w = twd(buf, hs); txt(w < FRW ? FRW - w : 0, hy, hs, buf); }
 }
 // man hinh xoay doc: LW x LH = OLED_H x 128, chu tu dong xuong dong
 #define LW OLED_H
@@ -575,15 +580,16 @@ static void render_v(bool vis) {
   frame(OLED_H, LH); pox = poy = 2; lw_ = OLED_H - 4;   // khung vien + chua 2 px moi ben
   const int VH = LH - 4;
   uint16_t hk[4]; int nh = held_list(hk);
-  int y1 = VH - 8 * nh, ah = y1 - VMAIN_Y - 1, cap;
+  bool cnt = vis && !latch_wait; int vt = cnt ? VMAIN_Y : 0;   // chua hang "xN" o tren chi khi dang hien
+  int y1 = VH - 8 * nh, ah = y1 - vt, cap;
   char big[12];
   if (latch_wait) { strcpy(big, "LATCH ?"); cap = 2; }
   else if (vis) { strcpy(big, lastn); cap = 3; }
   else { int a = 0; for (int l = L - 1; l > 0; l--) if (layers >> l & 1) { a = l; break; } lname_get(a, big); cap = 1; }
   int len = strlen(big), sc = 1;
   for (int s = cap; s >= 1; s--) { if (s > 1 && cpl_of(s) < (len < 3 ? len : 3)) continue; if (wlines(len, s) * (8 * s + 1) <= ah) { sc = s; break; } }
-  wtxt(big, VMAIN_Y + (ah - wlines(len, sc) * (8 * sc + 1)) / 2, sc, true);
-  if (vis && !latch_wait) { char c[8]; c[0] = 'x'; putnum(c + 1, rcnt); txt(lw_ - ((int)strlen(c) * 6 - 1), 0, 1, c); }
+  { int bh = (wlines(len, sc) - 1) * (8 * sc + 1) + 7 * sc; wtxt(big, vt + (ah - bh) / 2, sc, true); }   // can giua theo chieu cao that cua chu
+  if (cnt) { char c[8]; c[0] = 'x'; putnum(c + 1, rcnt); txt(lw_ - ((int)strlen(c) * 6 - 1), 0, 1, c); }
   for (int i = 0; i < nh; i++) {
     char lab[8]; kcname(hk[i], lab); if ((int)strlen(lab) > cpl_of(1)) lab[cpl_of(1)] = 0;
     txt(lw_ - ((int)strlen(lab) * 6 - 1), y1 + i * 8, 1, lab);
