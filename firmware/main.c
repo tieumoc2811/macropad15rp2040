@@ -461,7 +461,7 @@ static uint8_t OA = 0x3C;          // dia chi I2C OLED (tu do 0x3C / 0x3D)
 static i2c_inst_t *oi2c;           // bo I2C dang dung cho OLED
 static uint8_t osda = 20;          // chan SDA dang dung (SCL = SDA + 1)
 #ifndef OLED_H
-#define OLED_H 32                 // 32 = OLED 0.91" (128x32, app macropad15.html yeu cau) ; 64 = OLED 0.96" (128x64). Doi bang cmake -DOLED_H=64
+#define OLED_H 64                 // 32 = OLED 0.91" (128x32, app macropad15.html yeu cau) ; 64 = OLED 0.96" (128x64). Doi bang cmake -DOLED_H=64
 #endif
 static int rot_now;                // huong dang dung (theo layer dang hien): 0 / 2 = ngang, 1 / 3 = doc
 #define ROT rot_now
