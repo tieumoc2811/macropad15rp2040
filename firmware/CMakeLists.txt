@@ -1,0 +1,18 @@
+cmake_minimum_required(VERSION 3.13)
+set(PICO_BOARD pico)   # RP2040 (Pro Micro RP2040 dung cung boot2 W25Q080, flash >= 2 MB)
+include(pico_sdk_import.cmake)
+project(macropad15 C CXX ASM)
+pico_sdk_init()
+add_executable(macropad15 main.c usb_descriptors.c)
+pico_generate_pio_header(macropad15 ${CMAKE_CURRENT_LIST_DIR}/ws2812.pio)
+target_include_directories(macropad15 PRIVATE ${CMAKE_CURRENT_LIST_DIR})
+# cho phep doi chan / kich thuoc OLED luc cmake: -DOLED_H=32 -DLED_PIN=23 -DSTRIP_PIN=9 ...
+foreach(opt OLED_H LED_PIN EXT_PIN STRIP_PIN)
+  if(DEFINED ${opt})
+    target_compile_definitions(macropad15 PRIVATE ${opt}=${${opt}})
+  endif()
+endforeach()
+target_link_libraries(macropad15 pico_stdlib pico_flash pico_unique_id hardware_flash hardware_i2c hardware_pio hardware_clocks tinyusb_device tinyusb_board)
+pico_enable_stdio_uart(macropad15 0)   # giu GP0/GP1 cho ma tran, khong dung UART
+pico_enable_stdio_usb(macropad15 0)
+pico_add_extra_outputs(macropad15)
