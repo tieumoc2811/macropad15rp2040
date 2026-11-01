@@ -5,7 +5,7 @@ project(macropad15 C CXX ASM)
 pico_sdk_init()
 add_executable(macropad15 main.c usb_descriptors.c)
 target_include_directories(macropad15 PRIVATE ${CMAKE_CURRENT_LIST_DIR})
-# Man hinh OLED: mac dinh 128x64 (0.96"). Dung 0.91" 128x32 thi build voi: cmake .. -DOLED_H=32
+# Man hinh OLED: mac dinh 128x32 (0.91", app yeu cau). Dung 0.96" 128x64 thi build voi: cmake .. -DOLED_H=64
 if(DEFINED OLED_H)
   target_compile_definitions(macropad15 PRIVATE OLED_H=${OLED_H})
 endif()

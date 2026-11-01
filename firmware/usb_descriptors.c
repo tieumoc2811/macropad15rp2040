@@ -1,5 +1,11 @@
 #include "tusb.h"
 #include "pico/unique_id.h"
+#ifndef OLED_H
+#define OLED_H 32
+#endif
+#define STR2(x) #x
+#define STR(x) STR2(x)
+#define BUILD_TAG "b5"   // ten build hien trong danh sach thiet bi USB / hop chon thiet bi cua trinh duyet: dung de kiem tra da nap dung ban
 
 static const uint8_t d_kb[] = { TUD_HID_REPORT_DESC_KEYBOARD(HID_REPORT_ID(1)), TUD_HID_REPORT_DESC_CONSUMER(HID_REPORT_ID(2)) };
 static const uint8_t d_raw[] = {
@@ -29,7 +35,7 @@ uint16_t const *tud_descriptor_string_cb(uint8_t idx, uint16_t langid) {
   (void)langid; static uint16_t s[32]; const char *str; char ser[PICO_UNIQUE_BOARD_ID_SIZE_BYTES * 2 + 1];
   uint8_t n;
   if (idx == 0) { s[1] = 0x0409; n = 1; s[0] = (TUSB_DESC_STRING << 8) | (2 * n + 2); return s; }
-  if (idx == 1) str = "TM"; else if (idx == 2) str = "Macropad15 RP2040";
+  if (idx == 1) str = "TM"; else if (idx == 2) str = "Macropad15 RP2040 OLED" STR(OLED_H) " " BUILD_TAG;
   else if (idx == 3) { pico_get_unique_board_id_string(ser, sizeof ser); str = ser; } else return NULL;
   for (n = 0; str[n] && n < 31; n++) s[1 + n] = str[n];
   s[0] = (TUSB_DESC_STRING << 8) | (2 * n + 2);
