@@ -7,6 +7,7 @@
 #include "pico/flash.h"
 #include "hardware/flash.h"
 #include "hardware/i2c.h"
+#include "hardware/gpio.h"
 #include "hardware/sync.h"
 #include "hardware/structs/ioqspi.h"
 #include "hardware/structs/sio.h"
@@ -456,7 +457,9 @@ static void hid_task(void) {
 }
 
 // ---- OLED SSD1306 128x64 (hoac 128x32), moi lan gui 1 page de khong chan USB/quet phim ----
-#define OA 0x3C
+static uint8_t OA = 0x3C;          // dia chi I2C OLED (tu do 0x3C / 0x3D)
+static i2c_inst_t *oi2c;           // bo I2C dang dung cho OLED
+static uint8_t osda = 20;          // chan SDA dang dung (SCL = SDA + 1)
 #ifndef OLED_H
 #define OLED_H 32                 // 32 = OLED 0.91" (128x32, app macropad15.html yeu cau) ; 64 = OLED 0.96" (128x64). Doi bang cmake -DOLED_H=64
 #endif
@@ -611,7 +614,7 @@ static void corner_logo(void) {   // logo nho o goc tren trai: khung 0 cua logo 
     if (n >= 3) px(dx, dy);
   }
 }
-static void oled_pwr(bool on) { uint8_t c[] = {0, on ? 0xAF : 0xAE}; i2c_write_timeout_us(i2c0, OA, c, 2, false, 5000); }
+static void oled_pwr(bool on) { uint8_t c[] = {0, on ? 0xAF : 0xAE}; i2c_write_timeout_us(oi2c, OA, c, 2, false, 5000); }
 
 enum { OM_NORMAL, OM_FX };
 enum { FK_TEXT, FK_LOGO, FK_OFF };
@@ -679,6 +682,18 @@ static void fx_step(uint32_t now) {   // ve 1 khung len fb (opage phai bang 0 sa
   }
   opage = 0;
 }
+static bool oled_greeted;
+static void oled_splash(void) {   // luc OLED vua len: ve khung vien + "OLED OK" ngay, giu ~0,8 s (de kiem tra man hinh, khong phu thuoc cau hinh)
+  memset(fb, 0, sizeof fb); rot_now = cur_rot();
+  for (int x = 0; x < 128; x++) { px(x, 0); px(x, OLED_H - 1); }
+  for (int y = 0; y < OLED_H; y++) { px(0, y); px(127, y); }
+  ctxt("OLED OK", (OLED_H - 16) / 2, 2);
+  for (int p = 0; p < OLED_PAGES; p++) {
+    uint8_t c[] = {0, 0x21, 0, 127, 0x22, (uint8_t)p, (uint8_t)p}; uint8_t d[129]; d[0] = 0x40; memcpy(d + 1, fb + p * 128, 128);
+    i2c_write_timeout_us(oi2c, OA, c, 7, false, 20000); i2c_write_timeout_us(oi2c, OA, d, 129, false, 20000);
+  }
+  busy_wait_us(800000); memset(fb, 0, sizeof fb);
+}
 static void oled_try_init(void);
 static void oled_task(uint32_t now) {
   static uint32_t lt; static bool ip; static int lrot = -1;
@@ -689,7 +704,7 @@ static void oled_task(uint32_t now) {
   if (act_ms != lact) { lact = act_ms; if (om == OM_FX) { fx_end(now); } }   // bam phim / xoay encoder: thoat loi chao hoac screensaver
   if (opage < OLED_PAGES) {
     uint8_t c[] = {0, 0x21, 0, 127, 0x22, opage, opage}; uint8_t d[129]; d[0] = 0x40; memcpy(d + 1, fb + opage * 128, 128);
-    i2c_write_timeout_us(i2c0, OA, c, 7, false, 5000); i2c_write_timeout_us(i2c0, OA, d, 129, false, 5000); opage++; return;
+    i2c_write_timeout_us(oi2c, OA, c, 7, false, 5000); i2c_write_timeout_us(oi2c, OA, d, 129, false, 5000); opage++; return;
   }
   if (om == OM_NORMAL && OSW(OS_TIMEOUT) && !rn_active && !latch_wait && now - lchk >= 250) {   // het thoi gian khong dung -> screensaver
     lchk = now; uint16_t hk[4];
@@ -699,16 +714,28 @@ static void oled_task(uint32_t now) {
   bool vis = lastn[0] && (now - ot < 1200 || held_has(rkc)); if (vis != ip) { ip = vis; odirty = true; }
   if (odirty && now - lt >= 30) { lt = now; odirty = false; render(vis); opage = 0; }
 }
-static bool oled_greeted;
+// Tu do OLED: thu lan luot cac cap chan I2C (uu tien GP20/21 nhu ban Vial) va 2 dia chi 0x3C / 0x3D, moi lan goi thu 1 cap chan
+// cho toi khi co thiet bi tra loi. Ket qua nam trong osda / OA / oled_ok (app doc qua lenh info: byte 13..15).
+static const uint8_t OSDA_TRY[] = {20, 12, 16, 14, 10, 18};
 static void oled_try_init(void) {
   static const uint8_t ini[] = {0, 0xAE, 0xD5, 0x80, 0xA8, OLED_H - 1, 0xD3, 0, 0x40, 0x8D, 0x14, 0x20, 0x00, 0xA1, 0xC8, 0xDA, OLED_H == 32 ? 0x02 : 0x12, 0x81, 0xFF, 0xD9, 0xF1, 0xDB, 0x40, 0xA4, 0xA6, 0xAF};
-  oled_ok = i2c_write_timeout_us(i2c0, OA, ini, sizeof ini, false, 10000) > 0; odirty = true;
-  if (oled_ok && !oled_greeted) { oled_greeted = true; if (OSW(OS_GREET)) fx_start(1, ms()); }   // loi chao luc cam USB
+  static int ci;
+  uint8_t sda = OSDA_TRY[ci % sizeof OSDA_TRY]; ci++;
+  if (sda != osda || !oi2c) {   // doi sang cap chan khac: tra chan cu ve GPIO thuong
+    if (oi2c) { gpio_set_function(osda, GPIO_FUNC_NULL); gpio_set_function(osda + 1, GPIO_FUNC_NULL); gpio_disable_pulls(osda); gpio_disable_pulls(osda + 1); i2c_deinit(oi2c); }
+    osda = sda; oi2c = (sda >> 1) & 1 ? i2c1 : i2c0;
+    i2c_init(oi2c, 400000); gpio_set_function(sda, GPIO_FUNC_I2C); gpio_set_function(sda + 1, GPIO_FUNC_I2C); gpio_pull_up(sda); gpio_pull_up(sda + 1);
+  }
+  static const uint8_t ADDR[2] = {0x3C, 0x3D};
+  for (int k = 0; k < 2 && !oled_ok; k++) {
+    OA = ADDR[k];
+    oled_ok = i2c_write_timeout_us(oi2c, OA, ini, sizeof ini, false, 5000) > 0;
+  }
+  odirty = true;
+  if (oled_ok) ci = 0;
+  if (oled_ok && !oled_greeted) { oled_splash(); oled_greeted = true; if (OSW(OS_GREET)) fx_start(1, ms()); }   // loi chao luc cam USB
 }
-static void oled_init(void) {
-  i2c_init(i2c0, 400000); gpio_set_function(20, GPIO_FUNC_I2C); gpio_set_function(21, GPIO_FUNC_I2C); gpio_pull_up(20); gpio_pull_up(21);
-  oled_try_init();
-}
+static void oled_init(void) { oled_try_init(); }
 
 // ---- Raw HID: [cmd, off, n, data...] cmd 1=doc 2=ghi 3=luu flash 4=mac dinh 5=info 6=doc macro 7=ghi macro (byte, n<=28, off cao o byte 31) ----
 static uint8_t rep[32]; static bool rep_pending, save_req;   // 8 = doc du lieu OLED, 9 = ghi du lieu OLED (byte, n<=28), 10 = xem thu: byte1 0 dung / 1 loi chao / 2 screensaver / 3 chi chu / 4 chi logo
@@ -740,7 +767,7 @@ void tud_hid_set_report_cb(uint8_t itf, uint8_t id, hid_report_type_t t, uint8_t
   } else if (b[0] == 10 && sz >= 2) fx_start(b[1] <= 4 ? b[1] : 0, ms());
   else if (b[0] == 3) save_req = true;
   else if (b[0] == 4) { defaults(); relayer(); mc_stop(); mac_defaults(); mac_dirty = true; od_defaults(); od_dirty = true; }
-  else if (b[0] == 5) { rep[1] = L; rep[2] = NW & 255; rep[3] = NW >> 8; rep[4] = FW_VER; rep[5] = NFX; rep[6] = NMAC; rep[7] = MSLOT & 255; rep[8] = MSLOT >> 8; rep[9] = OLED_H; rep[10] = OD_NF; rep[11] = OD_FSZ & 255; rep[12] = OD_FSZ >> 8; }
+  else if (b[0] == 5) { rep[1] = L; rep[2] = NW & 255; rep[3] = NW >> 8; rep[4] = FW_VER; rep[5] = NFX; rep[6] = NMAC; rep[7] = MSLOT & 255; rep[8] = MSLOT >> 8; rep[9] = OLED_H; rep[10] = OD_NF; rep[11] = OD_FSZ & 255; rep[12] = OD_FSZ >> 8; rep[13] = oled_ok; rep[14] = OA; rep[15] = osda; }
   rep_pending = true;
 }
 uint16_t tud_hid_get_report_cb(uint8_t i, uint8_t id, hid_report_type_t t, uint8_t *b, uint16_t n) { (void)i; (void)id; (void)t; (void)b; (void)n; return 0; }
