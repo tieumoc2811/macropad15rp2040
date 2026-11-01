@@ -495,17 +495,20 @@ static void txt(int x, int y, int s, const char *t) {
 // bo cuc giong ban RP2040: giua = ten layer (ranh) HOAC phim vua bam (chu to nhat), goc tren phai = xN so lan bam, hang duoi = cac phim dang de (toi da 4)
 #if OLED_H == 32
 #define CNT_SC 1      // 128x32: chu nho 8 px o tren/duoi, giua chu 2-3 (16-24 px)
-#define HELD_SC 1
+#define HELD_SC 2     // hang phim dang de khi giu tu 2 phim tro len (to hon, de doc)
+#define HELD1_SC 1    // chi giu 1 phim: tren man da co ten phim lon nen hang nay de nho
 #define KEY_SC 3
 #define IDLE_SC 2
 #else
 #define CNT_SC 2      // 128x64: giong het ban RP2040
 #define HELD_SC 2
+#define HELD1_SC 2
 #define KEY_SC 4
 #define IDLE_SC 2
 #endif
 #define MAIN_Y (8 * CNT_SC)
-#define FRW 124   // be rong noi dung khi co khung vien (128 - 2 x 2 px)
+#define MG 4            // le tu khung vien den noi dung (px): hang xN, hang phim dang de, logo goc, chu. Tang/giam de dua xa/gan khung
+#define FRW (128 - 2 * MG)   // be rong noi dung khi co khung vien
 static int twd(const char *t, int sc) { int n = strlen(t); return n ? n * 6 * sc - sc : 0; }
 static int fitsc(const char *t, int mx) { int sc = mx < 1 ? 1 : mx; while (sc > 1 && twd(t, sc) > FRW) sc--; return sc; }
 static void ctxt(const char *t, int y, int sc) { int w = twd(t, sc); txt(w < 128 ? (128 - w) / 2 : 0, y, sc, t); }
@@ -528,10 +531,10 @@ static void frame(int w, int h) {   // khung vien 1 px quanh man hinh (toa do lo
 static void render_h(bool vis) {
   memset(fb, 0, sizeof fb);
   if (rn_active) { render_rename_h(); return; }
-  frame(128, OLED_H); pox = 2;   // chua 2 px moi ben trai/phai cho khung
+  frame(128, OLED_H); pox = MG;   // chua le MG px moi ben trai/phai cho khung
   corner_logo();
   uint16_t hk[4]; int nh = held_list(hk);
-  char buf[40]; int hs = HELD_SC, hy = OLED_H - 1;   // hang phim dang de: hy = dong tren cung cua chu (sau khi biet co chu thu nho)
+  char buf[40]; int hs = nh >= 2 ? HELD_SC : HELD1_SC, hy = OLED_H - 1;   // hang phim dang de: hy = dong tren cung cua chu (sau khi biet co chu thu nho)
   if (nh) {
     int first = 0;
     for (;;) {
@@ -540,9 +543,9 @@ static void render_h(bool vis) {
       if (twd(buf, hs) <= FRW) break;
       if (first + 1 < nh) first++; else if (hs > 1) hs--; else break;
     }
-    hy = OLED_H - 8 * hs - 1;   // chu cach khung duoi 1 px (bang khoang cach phia tren)
+    hy = OLED_H - 7 * hs - MG;   // day chu cach khung duoi MG px (bang khoang cach hang xN o tren)
   }
-  int y1 = (nh || OLED_H > 32) ? OLED_H - 8 * HELD_SC : OLED_H, ah = y1 - MAIN_Y, cap;
+  int y1 = (nh || OLED_H > 32) ? OLED_H - 8 * (nh ? hs : HELD_SC) : OLED_H, ah = y1 - MAIN_Y, cap;
   char big[12];
   if (latch_wait) { strcpy(big, "LATCH ?"); cap = 3; }
   else if (vis) { strcpy(big, lastn); cap = KEY_SC; }
@@ -550,10 +553,10 @@ static void render_h(bool vis) {
   int sc = fitsc(big, cap < ah / 8 ? cap : ah / 8);
   // can giua theo chieu doc: vung giua = tu duoi hang "xN" (neu dang hien) hoac tu khung tren, den tren hang phim dang de hoac khung duoi
   bool cnt = vis && !latch_wait; char c[8]; int cw = 0, cb = 0;   // hang "xN" goc tren phai: rong cw, ben duoi = cb
-  if (cnt) { c[0] = 'x'; putnum(c + 1, rcnt); cw = twd(c, CNT_SC); cb = 2 + 7 * CNT_SC + 1; }
+  if (cnt) { c[0] = 'x'; putnum(c + 1, rcnt); cw = twd(c, CNT_SC); cb = MG + 7 * CNT_SC + 1; }
   // can giua chu lon ngay giua khung (chu cao that = 7 * sc). Neu chu cham logo goc / hang "xN" thi ha xuong duoi chung, khong du cho thi giam co chu
-  bool lg = logo_on(); int lb = 2 + OLED_H / 4 + 1;   // logo goc chiem cot 0..31, hang 2..lb-1
-  int rt = 2, rb = nh ? hy - 1 : OLED_H - 2, w, tx, ty;
+  bool lg = logo_on(); int lb = MG + OLED_H / 4 + 1;   // logo goc chiem cot 0..31, hang 2..lb-1
+  int rt = MG, rb = nh ? hy - 1 : OLED_H - MG, w, tx, ty;
   for (;;) {
     w = twd(big, sc); tx = w < FRW ? (FRW - w) / 2 : 0; ty = rt + (rb - rt - 7 * sc) / 2;
     bool cl = lg && ty < lb && tx < 34, cc = cnt && ty < cb && tx + w + 2 > FRW - cw;
@@ -563,8 +566,8 @@ static void render_h(bool vis) {
     sc--;
   }
   txt(tx, ty, sc, big);
-  if (cnt) txt(FRW - cw, 2, CNT_SC, c);
-  if (nh) { int w = twd(buf, hs); txt(w < FRW ? FRW - w : 0, hy, hs, buf); }
+  if (cnt) txt(FRW - cw, MG, CNT_SC, c);
+  if (nh) { int w = twd(buf, hs); txt(w < FRW ? (FRW - w) / 2 : 0, hy, hs, buf); }   // hang phim dang de: can giua 2 canh ben
 }
 // man hinh xoay doc: LW x LH = OLED_H x 128, chu tu dong xuong dong
 #define LW OLED_H
@@ -589,8 +592,8 @@ static void render_rename_v(void) {
 static void render_v(bool vis) {
   memset(fb, 0, sizeof fb);
   if (rn_active) { render_rename_v(); return; }
-  frame(OLED_H, LH); pox = poy = 2; lw_ = OLED_H - 4;   // khung vien + chua 2 px moi ben
-  const int VH = LH - 4;
+  frame(OLED_H, LH); pox = poy = MG; lw_ = OLED_H - 2 * MG;   // khung vien + chua le MG px moi ben
+  const int VH = LH - 2 * MG;
   uint16_t hk[4]; int nh = held_list(hk);
   bool cnt = vis && !latch_wait; int vt = cnt ? VMAIN_Y : 0;   // chua hang "xN" o tren chi khi dang hien
   int y1 = VH - 8 * nh, ah = y1 - vt, cap;
@@ -604,7 +607,7 @@ static void render_v(bool vis) {
   if (cnt) { char c[8]; c[0] = 'x'; putnum(c + 1, rcnt); txt(lw_ - ((int)strlen(c) * 6 - 1), 0, 1, c); }
   for (int i = 0; i < nh; i++) {
     char lab[8]; kcname(hk[i], lab); if ((int)strlen(lab) > cpl_of(1)) lab[cpl_of(1)] = 0;
-    txt(lw_ - ((int)strlen(lab) * 6 - 1), y1 + i * 8, 1, lab);
+    { int lw2 = (int)strlen(lab) * 6 - 1; txt(lw_ > lw2 ? (lw_ - lw2) / 2 : 0, y1 + i * 8, 1, lab); }   // can giua 2 canh ben
   }
 }
 static void render(bool vis) { if (ROT_V) render_v(vis); else render_h(vis); pox = poy = 0; lw_ = OLED_H; }
@@ -644,7 +647,7 @@ static void corner_logo(void) {   // logo nho o goc tren trai: logo dong thu nho
   for (int dy = 0; dy < OLED_H / 4; dy++) for (int dx = 0; dx < 32; dx++) {
     int n = 0;
     for (int b = 0; b < 4; b++) for (int a = 0; a < 4; a++) { int x = dx * 4 + a, y = dy * 4 + b; n += f[(y >> 3) * 128 + x] >> (y & 7) & 1; }
-    if (n >= 3) px(dx, dy + 2);
+    if (n >= 3) px(dx, dy + MG);
   }
 }
 static void oled_pwr(bool on) { uint8_t c[] = {0, on ? 0xAF : 0xAE}; i2c_write_timeout_us(oi2c, OA, c, 2, false, 5000); }
