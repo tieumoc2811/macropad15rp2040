@@ -458,7 +458,7 @@ static void hid_task(void) {
 // ---- OLED SSD1306 128x64 (hoac 128x32), moi lan gui 1 page de khong chan USB/quet phim ----
 #define OA 0x3C
 #ifndef OLED_H
-#define OLED_H 64                 // 64 = OLED 0.96" (128x64, nhu ban Vial) ; 32 = OLED 0.91" (128x32). Doi bang cmake -DOLED_H=32
+#define OLED_H 32                 // 32 = OLED 0.91" (128x32, app macropad15.html yeu cau) ; 64 = OLED 0.96" (128x64). Doi bang cmake -DOLED_H=64
 #endif
 static int rot_now;                // huong dang dung (theo layer dang hien): 0 / 2 = ngang, 1 / 3 = doc
 #define ROT rot_now
