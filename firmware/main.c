@@ -472,7 +472,9 @@ static int cur_rot(void) {         // layer cao nhat dang bat; layer chua dat hu
 #define ROT_V (ROT & 1)
 #define OLED_PAGES (OLED_H / 8)
 static uint8_t fb[128 * OLED_PAGES], opage = OLED_PAGES; static bool oled_ok;
+static int pox, poy;             // do lech noi dung (chua khung vien) - chi dung khi ve man hinh chinh, ve xong tra ve 0
 static void px(int x, int y) {   // toa do logic (sau xoay) -> toa do man hinh that
+  x += pox; y += poy;
   int pw = ROT_V ? OLED_H : 128, ph = ROT_V ? 128 : OLED_H;
   if ((unsigned)x >= (unsigned)pw || (unsigned)y >= (unsigned)ph) return;
   int X, Y;
@@ -495,16 +497,17 @@ static void txt(int x, int y, int s, const char *t) {
 #define CNT_SC 1      // 128x32: chu nho 8 px o tren/duoi, giua chu 2-3 (16-24 px)
 #define HELD_SC 1
 #define KEY_SC 3
-#define IDLE_SC 3
+#define IDLE_SC 2
 #else
 #define CNT_SC 2      // 128x64: giong het ban RP2040
 #define HELD_SC 2
 #define KEY_SC 4
-#define IDLE_SC 3
+#define IDLE_SC 2
 #endif
 #define MAIN_Y (8 * CNT_SC)
+#define FRW 124   // be rong noi dung khi co khung vien (128 - 2 x 2 px)
 static int twd(const char *t, int sc) { int n = strlen(t); return n ? n * 6 * sc - sc : 0; }
-static int fitsc(const char *t, int mx) { int sc = mx < 1 ? 1 : mx; while (sc > 1 && twd(t, sc) > 128) sc--; return sc; }
+static int fitsc(const char *t, int mx) { int sc = mx < 1 ? 1 : mx; while (sc > 1 && twd(t, sc) > FRW) sc--; return sc; }
 static void ctxt(const char *t, int y, int sc) { int w = twd(t, sc); txt(w < 128 ? (128 - w) / 2 : 0, y, sc, t); }
 static void render_rename_h(void) {
   char top[12] = "RENAME L"; putnum(top + 8, rn_layer); txt(0, 0, 1, top);
@@ -515,41 +518,49 @@ static void render_rename_h(void) {
   txt(0, OLED_H - 8, 1, "ENT:OK RENAME:CANCEL");
 }
 static void corner_logo(void);
+static void frame(int w, int h) {   // khung vien 1 px quanh man hinh (toa do logic w x h, bo qua do lech noi dung)
+  int sx = pox, sy = poy; pox = poy = 0;
+  for (int x = 0; x < w; x++) { px(x, 0); px(x, h - 1); }
+  for (int y = 0; y < h; y++) { px(0, y); px(w - 1, y); }
+  pox = sx; poy = sy;
+}
 static void render_h(bool vis) {
   memset(fb, 0, sizeof fb);
   if (rn_active) { render_rename_h(); return; }
+  frame(128, OLED_H); pox = 2;   // chua 2 px moi ben trai/phai cho khung
   corner_logo();
   uint16_t hk[4]; int nh = held_list(hk);
   int y1 = (nh || OLED_H > 32) ? OLED_H - 8 * HELD_SC : OLED_H, ah = y1 - MAIN_Y, cap;
   char big[12];
-  if (latch_wait) { strcpy(big, "LATCH ?"); cap = IDLE_SC; }
+  if (latch_wait) { strcpy(big, "LATCH ?"); cap = 3; }
   else if (vis) { strcpy(big, lastn); cap = KEY_SC; }
   else { int a = 0; for (int l = L - 1; l > 0; l--) if (layers >> l & 1) { a = l; break; } lname_get(a, big); cap = IDLE_SC; }
   int sc = fitsc(big, cap < ah / 8 ? cap : ah / 8);
-  ctxt(big, MAIN_Y + (ah - 8 * sc) / 2, sc);
-  if (vis && !latch_wait) { char c[8]; c[0] = 'x'; putnum(c + 1, rcnt); txt(128 - twd(c, CNT_SC), 0, CNT_SC, c); }
+  { int w = twd(big, sc); txt(w < FRW ? (FRW - w) / 2 : 0, MAIN_Y + (ah - 8 * sc) / 2, sc, big); }
+  if (vis && !latch_wait) { char c[8]; c[0] = 'x'; putnum(c + 1, rcnt); txt(FRW - twd(c, CNT_SC), 2, CNT_SC, c); }
   if (nh) {
     char buf[40]; int first = 0, hs = HELD_SC;
     for (;;) {
       buf[0] = 0;
       for (int i = first; i < nh; i++) { char lab[8]; kcname(hk[i], lab); if (i > first) strcat(buf, " "); strncat(buf, lab, sizeof buf - strlen(buf) - 1); }
-      if (twd(buf, hs) <= 128) break;
+      if (twd(buf, hs) <= FRW) break;
       if (first + 1 < nh) first++; else if (hs > 1) hs--; else break;
     }
-    int w = twd(buf, hs); txt(w < 128 ? 128 - w : 0, OLED_H - 8 * hs, hs, buf);
+    int w = twd(buf, hs); txt(w < FRW ? FRW - w : 0, OLED_H - 8 * hs - 1, hs, buf);
   }
 }
 // man hinh xoay doc: LW x LH = OLED_H x 128, chu tu dong xuong dong
 #define LW OLED_H
 #define LH 128
 #define VMAIN_Y 8
-static int cpl_of(int sc) { int n = (LW + sc) / (6 * sc); return n < 1 ? 1 : n; }
+static int lw_ = OLED_H;   // be rong noi dung doc (tru khung vien khi ve man hinh chinh)
+static int cpl_of(int sc) { int n = (lw_ + sc) / (6 * sc); return n < 1 ? 1 : n; }
 static int wlines(int len, int sc) { int c = cpl_of(sc); return (len + c - 1) / c; }
 static void wtxt(const char *t, int y, int sc, bool center) {   // chuoi xuong dong, moi dong toi da cpl ky tu
   int len = strlen(t), cpl = cpl_of(sc), k = 0; char ln[16];
   for (int i = 0; i < len; i += cpl, k++) {
     int n = len - i < cpl ? len - i : cpl; if (n > 15) n = 15; memcpy(ln, t + i, n); ln[n] = 0;
-    int w = n * 6 * sc - sc; txt(center && w < LW ? (LW - w) / 2 : 0, y + k * (8 * sc + 1), sc, ln);
+    int w = n * 6 * sc - sc; txt(center && w < lw_ ? (lw_ - w) / 2 : 0, y + k * (8 * sc + 1), sc, ln);
   }
 }
 static void render_rename_v(void) {
@@ -561,22 +572,24 @@ static void render_rename_v(void) {
 static void render_v(bool vis) {
   memset(fb, 0, sizeof fb);
   if (rn_active) { render_rename_v(); return; }
+  frame(OLED_H, LH); pox = poy = 2; lw_ = OLED_H - 4;   // khung vien + chua 2 px moi ben
+  const int VH = LH - 4;
   uint16_t hk[4]; int nh = held_list(hk);
-  int y1 = LH - 8 * nh, ah = y1 - VMAIN_Y - 1, cap;
+  int y1 = VH - 8 * nh, ah = y1 - VMAIN_Y - 1, cap;
   char big[12];
   if (latch_wait) { strcpy(big, "LATCH ?"); cap = 2; }
   else if (vis) { strcpy(big, lastn); cap = 3; }
-  else { int a = 0; for (int l = L - 1; l > 0; l--) if (layers >> l & 1) { a = l; break; } lname_get(a, big); cap = 2; }
+  else { int a = 0; for (int l = L - 1; l > 0; l--) if (layers >> l & 1) { a = l; break; } lname_get(a, big); cap = 1; }
   int len = strlen(big), sc = 1;
   for (int s = cap; s >= 1; s--) { if (s > 1 && cpl_of(s) < (len < 3 ? len : 3)) continue; if (wlines(len, s) * (8 * s + 1) <= ah) { sc = s; break; } }
   wtxt(big, VMAIN_Y + (ah - wlines(len, sc) * (8 * sc + 1)) / 2, sc, true);
-  if (vis && !latch_wait) { char c[8]; c[0] = 'x'; putnum(c + 1, rcnt); txt(LW - ((int)strlen(c) * 6 - 1), 0, 1, c); }
+  if (vis && !latch_wait) { char c[8]; c[0] = 'x'; putnum(c + 1, rcnt); txt(lw_ - ((int)strlen(c) * 6 - 1), 0, 1, c); }
   for (int i = 0; i < nh; i++) {
     char lab[8]; kcname(hk[i], lab); if ((int)strlen(lab) > cpl_of(1)) lab[cpl_of(1)] = 0;
-    txt(LW - ((int)strlen(lab) * 6 - 1), y1 + i * 8, 1, lab);
+    txt(lw_ - ((int)strlen(lab) * 6 - 1), y1 + i * 8, 1, lab);
   }
 }
-static void render(bool vis) { if (ROT_V) render_v(vis); else render_h(vis); }
+static void render(bool vis) { if (ROT_V) render_v(vis); else render_h(vis); pox = poy = 0; lw_ = OLED_H; }
 
 // ---- loi chao / screensaver / logo dong: du lieu luu flash rieng (OD_OFF) ----
 // odimg: [0..3] magic, sau do (offset app): 0 = so khung logo, 16 = do dai chu chao + 63 ky tu, 80 = do dai chu screensaver + 63 ky tu, 256 + i * OD_FSZ = khung logo i (dang trang SSD1306: 128 cot x trang 8 diem)
@@ -611,7 +624,7 @@ static void corner_logo(void) {   // logo nho o goc tren trai: khung 0 cua logo 
   for (int dy = 0; dy < OLED_H / 4; dy++) for (int dx = 0; dx < 32; dx++) {
     int n = 0;
     for (int b = 0; b < 4; b++) for (int a = 0; a < 4; a++) { int x = dx * 4 + a, y = dy * 4 + b; n += f[(y >> 3) * 128 + x] >> (y & 7) & 1; }
-    if (n >= 3) px(dx, dy);
+    if (n >= 3) px(dx, dy + 2);
   }
 }
 static void oled_pwr(bool on) { uint8_t c[] = {0, on ? 0xAF : 0xAE}; i2c_write_timeout_us(oi2c, OA, c, 2, false, 5000); }
