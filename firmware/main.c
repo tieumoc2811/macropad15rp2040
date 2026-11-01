@@ -548,10 +548,17 @@ static void render_h(bool vis) {
   else { int a = 0; for (int l = L - 1; l > 0; l--) if (layers >> l & 1) { a = l; break; } lname_get(a, big); cap = IDLE_SC; }
   int sc = fitsc(big, cap < ah / 8 ? cap : ah / 8);
   // can giua theo chieu doc: vung giua = tu duoi hang "xN" (neu dang hien) hoac tu khung tren, den tren hang phim dang de hoac khung duoi
-  bool cnt = vis && !latch_wait;
-  int rt = cnt ? MAIN_Y : 2, rb = nh ? hy - 1 : OLED_H - 2;   // chu cao that = 7 * sc (dong thu 8 cua font la khoang trong)
-  { int w = twd(big, sc); txt(w < FRW ? (FRW - w) / 2 : 0, rt + (rb - rt - 7 * sc) / 2, sc, big); }
-  if (cnt) { char c[8]; c[0] = 'x'; putnum(c + 1, rcnt); txt(FRW - twd(c, CNT_SC), 2, CNT_SC, c); }
+  bool cnt = vis && !latch_wait; char c[8]; int cw = 0, cb = 0;   // hang "xN" goc tren phai: rong cw, ben duoi = cb
+  if (cnt) { c[0] = 'x'; putnum(c + 1, rcnt); cw = twd(c, CNT_SC); cb = 2 + 7 * CNT_SC + 1; }
+  // can giua chu lon ngay giua khung (chu cao that = 7 * sc); neu chu cham hang "xN" thi giam co chu, het cach thi moi ha xuong duoi hang "xN"
+  int rt = 2, rb = nh ? hy - 1 : OLED_H - 2, w, tx, ty;
+  for (;;) {
+    w = twd(big, sc); tx = w < FRW ? (FRW - w) / 2 : 0; ty = rt + (rb - rt - 7 * sc) / 2;
+    if (!cnt || ty >= cb || tx + w + 2 <= FRW - cw) break;
+    if (sc > 1) sc--; else { rt = MAIN_Y; ty = rt + (rb - rt - 7 * sc) / 2; break; }
+  }
+  txt(tx, ty, sc, big);
+  if (cnt) txt(FRW - cw, 2, CNT_SC, c);
   if (nh) { int w = twd(buf, hs); txt(w < FRW ? FRW - w : 0, hy, hs, buf); }
 }
 // man hinh xoay doc: LW x LH = OLED_H x 128, chu tu dong xuong dong
