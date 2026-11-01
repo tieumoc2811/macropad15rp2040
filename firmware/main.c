@@ -518,6 +518,7 @@ static void render_rename_h(void) {
   txt(0, OLED_H - 8, 1, "ENT:OK RENAME:CANCEL");
 }
 static void corner_logo(void);
+static bool logo_on(void);
 static void frame(int w, int h) {   // khung vien 1 px quanh man hinh (toa do logic w x h, bo qua do lech noi dung)
   int sx = pox, sy = poy; pox = poy = 0;
   for (int x = 0; x < w; x++) { px(x, 0); px(x, h - 1); }
@@ -550,12 +551,16 @@ static void render_h(bool vis) {
   // can giua theo chieu doc: vung giua = tu duoi hang "xN" (neu dang hien) hoac tu khung tren, den tren hang phim dang de hoac khung duoi
   bool cnt = vis && !latch_wait; char c[8]; int cw = 0, cb = 0;   // hang "xN" goc tren phai: rong cw, ben duoi = cb
   if (cnt) { c[0] = 'x'; putnum(c + 1, rcnt); cw = twd(c, CNT_SC); cb = 2 + 7 * CNT_SC + 1; }
-  // can giua chu lon ngay giua khung (chu cao that = 7 * sc); neu chu cham hang "xN" thi giam co chu, het cach thi moi ha xuong duoi hang "xN"
+  // can giua chu lon ngay giua khung (chu cao that = 7 * sc). Neu chu cham logo goc / hang "xN" thi ha xuong duoi chung, khong du cho thi giam co chu
+  bool lg = logo_on(); int lb = 2 + OLED_H / 4 + 1;   // logo goc chiem cot 0..31, hang 2..lb-1
   int rt = 2, rb = nh ? hy - 1 : OLED_H - 2, w, tx, ty;
   for (;;) {
     w = twd(big, sc); tx = w < FRW ? (FRW - w) / 2 : 0; ty = rt + (rb - rt - 7 * sc) / 2;
-    if (!cnt || ty >= cb || tx + w + 2 <= FRW - cw) break;
-    if (sc > 1) sc--; else { rt = MAIN_Y; ty = rt + (rb - rt - 7 * sc) / 2; break; }
+    bool cl = lg && ty < lb && tx < 34, cc = cnt && ty < cb && tx + w + 2 > FRW - cw;
+    if (!cl && !cc) break;
+    int need = (cl ? lb : 0) > (cc ? cb : 0) ? lb : cb;
+    if (rb - need >= 7 * sc || sc <= 1) { ty = need + (rb - need - 7 * sc) / 2; break; }
+    sc--;
   }
   txt(tx, ty, sc, big);
   if (cnt) txt(FRW - cw, 2, CNT_SC, c);
@@ -631,9 +636,11 @@ static int od_text(int which, char *o) {   // which 0 = loi chao, 1 = screensave
   for (int i = 0; i < n; i++) o[i] = p[1 + i] < 32 || p[1 + i] > 126 ? ' ' : p[1 + i];
   o[n] = 0; return n;
 }
-static void corner_logo(void) {   // logo nho o goc tren trai: khung 0 cua logo dong thu nho 4 lan (128xH -> 32 x H/4), chi ve khi man hinh nam ngang
-  if (OSW(OS_CORNER) != 1 || ROT_V || od_frames() < 1) return;
-  const uint8_t *f = odimg + 4 + 256;
+static uint32_t clf;   // khung logo goc dang hien (chay vong theo OS_FRMS)
+static bool logo_on(void) { return !ROT_V && od_frames() >= 1; }   // logo goc luon hien khi man hinh nam ngang va da co logo
+static void corner_logo(void) {   // logo nho o goc tren trai: logo dong thu nho 4 lan (128xH -> 32 x H/4), luon hien, chay vong cac khung
+  if (!logo_on()) return;
+  const uint8_t *f = odimg + 4 + 256 + (clf % od_frames()) * OD_FSZ;
   for (int dy = 0; dy < OLED_H / 4; dy++) for (int dx = 0; dx < 32; dx++) {
     int n = 0;
     for (int b = 0; b < 4; b++) for (int a = 0; a < 4; a++) { int x = dx * 4 + a, y = dy * 4 + b; n += f[(y >> 3) * 128 + x] >> (y & 7) & 1; }
@@ -737,6 +744,8 @@ static void oled_task(uint32_t now) {
     if (held_list(hk)) act_ms = now; else if (now - act_ms >= (uint32_t)OSW(OS_TIMEOUT) * 1000) fx_start(2, now);
   }
   if (om == OM_FX) { if (now - lt >= 30) { lt = now; fx_step(now); } return; }
+  { static uint32_t lcf; uint32_t ms_ = OSW(OS_FRMS); if (ms_ < 60) ms_ = 60;   // logo goc chay vong cac khung
+    if (!rn_active && logo_on() && od_frames() > 1 && now - lcf >= ms_) { lcf = now; clf++; odirty = true; } }
   bool vis = lastn[0] && (now - ot < 1200 || held_has(rkc)); if (vis != ip) { ip = vis; odirty = true; }
   if (odirty && now - lt >= 30) { lt = now; odirty = false; render(vis); opage = 0; }
 }
