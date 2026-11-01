@@ -495,14 +495,12 @@ static void txt(int x, int y, int s, const char *t) {
 // bo cuc giong ban RP2040: giua = ten layer (ranh) HOAC phim vua bam (chu to nhat), goc tren phai = xN so lan bam, hang duoi = cac phim dang de (toi da 4)
 #if OLED_H == 32
 #define CNT_SC 1      // 128x32: chu nho 8 px o tren/duoi, giua chu 2-3 (16-24 px)
-#define HELD_SC 2     // hang phim dang de khi giu tu 2 phim tro len (to hon, de doc)
-#define HELD1_SC 1    // chi giu 1 phim: tren man da co ten phim lon nen hang nay de nho
+#define HELD_SC 2     // hang phim dang de (chi hien khi giu tu 2 phim tro len)
 #define KEY_SC 3
 #define IDLE_SC 2
 #else
 #define CNT_SC 2      // 128x64: giong het ban RP2040
 #define HELD_SC 2
-#define HELD1_SC 2
 #define KEY_SC 4
 #define IDLE_SC 2
 #endif
@@ -533,8 +531,8 @@ static void render_h(bool vis) {
   if (rn_active) { render_rename_h(); return; }
   frame(128, OLED_H); pox = MG;   // chua le MG px moi ben trai/phai cho khung
   corner_logo();
-  uint16_t hk[4]; int nh = held_list(hk);
-  char buf[40]; int hs = nh >= 2 ? HELD_SC : HELD1_SC, hy = OLED_H - 1;   // hang phim dang de: hy = dong tren cung cua chu (sau khi biet co chu thu nho)
+  uint16_t hk[4]; int nh = held_list(hk); if (nh < 2) nh = 0;   // chi hien hang phim dang de khi giu tu 2 phim tro len
+  char buf[40]; int hs = HELD_SC, hy = OLED_H - 1;   // hang phim dang de: hy = dong tren cung cua chu (sau khi biet co chu thu nho)
   if (nh) {
     int first = 0;
     for (;;) {
@@ -545,7 +543,7 @@ static void render_h(bool vis) {
     }
     hy = OLED_H - 7 * hs - MG;   // day chu cach khung duoi MG px (bang khoang cach hang xN o tren)
   }
-  int y1 = (nh || OLED_H > 32) ? OLED_H - 8 * (nh ? hs : HELD_SC) : OLED_H, ah = y1 - MAIN_Y, cap;
+  int y1 = (nh || OLED_H > 32) ? OLED_H - 8 * hs : OLED_H, ah = y1 - MAIN_Y, cap;
   char big[12];
   if (latch_wait) { strcpy(big, "LATCH ?"); cap = 3; }
   else if (vis) { strcpy(big, lastn); cap = KEY_SC; }
@@ -594,7 +592,7 @@ static void render_v(bool vis) {
   if (rn_active) { render_rename_v(); return; }
   frame(OLED_H, LH); pox = poy = MG; lw_ = OLED_H - 2 * MG;   // khung vien + chua le MG px moi ben
   const int VH = LH - 2 * MG;
-  uint16_t hk[4]; int nh = held_list(hk);
+  uint16_t hk[4]; int nh = held_list(hk); if (nh < 2) nh = 0;   // chi hien hang phim dang de khi giu tu 2 phim tro len
   bool cnt = vis && !latch_wait; int vt = cnt ? VMAIN_Y : 0;   // chua hang "xN" o tren chi khi dang hien
   int y1 = VH - 8 * nh, ah = y1 - vt, cap;
   char big[12];
