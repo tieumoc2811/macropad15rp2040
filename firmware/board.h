@@ -16,7 +16,7 @@
 #define OLED_SDA 20
 #define OLED_SCL 21
 #ifndef OLED_H
-#define OLED_H 64            // 64 = OLED 0.96" (128x64, mac dinh cua ban Vial) ; 32 = OLED 0.91" (128x32)
+#define OLED_H 32            // 32 = OLED 0.91" (128x32, mac dinh) ; 64 = OLED 0.96" (128x64, cmake -DOLED_H=64)
 #endif
 
 // LED WS2812 (-1 = khong dung)

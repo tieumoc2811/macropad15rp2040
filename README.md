@@ -1,8 +1,9 @@
-# Macropad15 - firmware RP2040 (Pro Micro RP2040), khong LED
+# Macropad15 - firmware RP2040 (Pro Micro RP2040)
 
 Firmware tu viet (Pico SDK) giong ban RP2350: 15 phim + 3 nut nhan encoder + 3 encoder, OLED SSD1306,
-Nokia multitap, tap dance, combo, latch, 16 macro, doi ten layer, cau hinh bang `firmware/macropad15.html` (WebHID).
-Da bo het LED (WS2812 / day den / den onboard) va PIO.
+Nokia multitap, tap dance, combo, latch, 32 macro (ten dat ngay trong hop "Chon phim"), chuoi (sequence 8 bo x 8 buoc), go Morse 3 phim (+ goi y),
+LED WS2812 onboard + day den 15 bong (25 hieu ung), doi ten layer, cau hinh bang `firmware/macropad15.html` (WebHID). Chuc nang dong bo voi ban RP2350 (FW_VER 8).
+So do chan nam trong `firmware/board.h` (LED_PIN / STRIP_PIN / EXT_PIN = -1 la tat).
 
 ## Chan (lay theo ban Vial)
 | Chuc nang | Chan |
@@ -27,7 +28,8 @@ Nen nap `flash_nuke.uf2` truoc neu board dang chay Vial (xoa EEPROM cu), sau do 
 Mo `firmware/macropad15.html` bang Chrome/Edge, bam ket noi (VID `0xC1A0`, PID `0x0017`).
 
 ## Luu y
-- Cac cai dat LED trong app van hien nhung firmware bo qua, khong co tac dung. Phim LED (`KC_LEDFX`) gan trong app cung khong lam gi.
-- Encoder quay nguoc chieu: doi cho 2 chan cua encoder do trong mang `encp` o dau `main.c`.
-- Du lieu cau hinh nam o cuoi flash 2MB (`PICO_BOARD=pico`), dung duoc cho board flash >= 2MB.
+- LED: onboard GP25 (`LED_PIN`), day den 15 bong DIN o GP9 (`STRIP_PIN`), led ngoai `EXT_PIN` = -1 (tat, vi GP4 la cot ma tran). Doi bang `-DLED_PIN=...` hoac sua `board.h`.
+- Go Morse: xem `MORSE.md`. Test: `sh test/run_tests.sh` (can gcc + node).
+- Encoder quay nguoc chieu: doi cho 2 chan cua encoder do trong `ENC_PINS` o `board.h`.
+- Du lieu cau hinh nam o cuoi flash 2MB (`PICO_BOARD=pico`), dung duoc cho board flash >= 2MB. Vung macro 32 KB + OLED + cau hinh: sau khi nap firmware moi, macro va du lieu OLED cu ve mac dinh.
 - Nut BOOT tren board: bam 1 lan = chuyen layer ke tiep.

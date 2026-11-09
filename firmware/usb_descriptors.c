@@ -1,8 +1,6 @@
 #include "tusb.h"
 #include "pico/unique_id.h"
-#ifndef OLED_H
-#define OLED_H 32
-#endif
+#include "board.h"
 #define STR2(x) #x
 #define STR(x) STR2(x)
 #define BUILD_TAG "b5"   // ten build hien trong danh sach thiet bi USB / hop chon thiet bi cua trinh duyet: dung de kiem tra da nap dung ban
