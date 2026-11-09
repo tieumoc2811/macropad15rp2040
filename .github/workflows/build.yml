@@ -14,6 +14,8 @@ jobs:
       - name: Lay Pico SDK 2.1.1
         run: git clone --depth 1 --branch 2.1.1 --recurse-submodules --shallow-submodules https://github.com/raspberrypi/pico-sdk "$HOME/pico-sdk"
       - name: Build
+        env:
+          CXXFLAGS: "-include cstdint"   # pioasm (Pico SDK 2.1.1) thieu #include <cstdint> voi g++ moi (GCC 15)
         run: |
           export PICO_SDK_PATH="$HOME/pico-sdk"
           CM=$(find "$GITHUB_WORKSPACE" -path '*/firmware/CMakeLists.txt' | head -n1)
